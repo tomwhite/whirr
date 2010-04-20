@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+#
+# Configure an instance to shutdown after a specified number of minutes.
+#
+
+set -x
+set -e
+
+mins_to_shutdown=$1
+
+shutdown -h +$mins_to_shutdown >/dev/null &
