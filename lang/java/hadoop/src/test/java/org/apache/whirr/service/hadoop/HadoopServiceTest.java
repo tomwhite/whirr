@@ -25,7 +25,9 @@ import org.apache.hadoop.mapred.JobClient;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.lib.LongSumReducer;
 import org.apache.hadoop.mapred.lib.TokenCountMapper;
+import org.apache.whirr.service.ClusterSpec;
 import org.apache.whirr.service.ServiceSpec;
+import org.apache.whirr.service.ClusterSpec.InstanceTemplate;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -53,8 +55,13 @@ public class HadoopServiceTest {
     serviceSpec.setSecretKeyFile(secretKeyFile);
     serviceSpec.setClusterName(clusterName);
     service = new HadoopService(serviceSpec);
-    cluster = service.launchCluster(1);
-    proxy = new HadoopProxy(cluster);
+    
+    ClusterSpec clusterSpec = new ClusterSpec(
+	new InstanceTemplate(1, HadoopService.MASTER_ROLE),
+	new InstanceTemplate(1, HadoopService.WORKER_ROLE));
+
+    cluster = service.launchCluster(clusterSpec);
+    proxy = new HadoopProxy(serviceSpec, cluster);
     proxy.start();
   }
   
@@ -93,7 +100,7 @@ public class HadoopServiceTest {
   
   private Configuration getConfiguration() {
     Configuration conf = new Configuration();
-    for (Entry<Object, Object> entry : cluster.getHadoopSiteProperties().entrySet()) {
+    for (Entry<Object, Object> entry : cluster.getConfiguration().entrySet()) {
       conf.set(entry.getKey().toString(), entry.getValue().toString());
     }
     return conf;

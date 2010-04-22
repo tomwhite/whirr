@@ -1,44 +1,57 @@
 package org.apache.whirr.service.hadoop;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 import static org.jclouds.compute.options.TemplateOptions.Builder.runScript;
 
 import com.google.common.base.Charsets;
+import com.google.common.base.Function;
+import com.google.common.collect.Collections2;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Sets;
 import com.google.common.io.Files;
 
 import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.Map.Entry;
 
+import org.apache.whirr.service.ClusterSpec;
 import org.apache.whirr.service.ComputeServiceBuilder;
 import org.apache.whirr.service.RunUrlBuilder;
+import org.apache.whirr.service.Service;
 import org.apache.whirr.service.ServiceSpec;
+import org.apache.whirr.service.Cluster.Instance;
+import org.apache.whirr.service.ClusterSpec.InstanceTemplate;
 import org.jclouds.compute.ComputeService;
 import org.jclouds.compute.domain.NodeMetadata;
 import org.jclouds.compute.domain.OsFamily;
 import org.jclouds.compute.domain.Template;
 
-public class HadoopService {
+public class HadoopService extends Service {
+  
+  public static final Set<String> MASTER_ROLE = Sets.newHashSet("nn", "jt");
+  public static final Set<String> WORKER_ROLE = Sets.newHashSet("dn", "tt");
 
-  private ServiceSpec spec;
-
-  public HadoopService(ServiceSpec spec) {
-    this.spec = spec;
+  public HadoopService(ServiceSpec serviceSpec) {
+    super(serviceSpec);
   }
 
-  public HadoopCluster launchCluster(int numWorkers) throws IOException {
-    ComputeService computeService = ComputeServiceBuilder.build(spec);
+  @Override
+  public HadoopCluster launchCluster(ClusterSpec clusterSpec) throws IOException {
+    ComputeService computeService = ComputeServiceBuilder.build(serviceSpec);
 
-    String privateKey = spec.readPrivateKey();
-    String publicKey = spec.readPublicKey();
+    String privateKey = serviceSpec.readPrivateKey();
+    String publicKey = serviceSpec.readPublicKey();
     
     // deal with user packages and autoshutdown with extra runurls
     byte[] nnjtBootScript = RunUrlBuilder.runUrls(
       "sun/java/install",
-      String.format("apache/hadoop/install nn,jt -c %s", spec.getProvider()));
+      String.format("apache/hadoop/install nn,jt -c %s", serviceSpec.getProvider()));
     
     Template template = computeService.templateBuilder()
     .osFamily(OsFamily.UBUNTU)
@@ -48,8 +61,11 @@ public class HadoopService {
 	      .inboundPorts(22, 80, 8020, 8021, 50030)) // TODO: restrict further
     .build();
     
+    InstanceTemplate instanceTemplate = clusterSpec.getInstanceTemplate(MASTER_ROLE);
+    checkNotNull(instanceTemplate);
+    checkArgument(instanceTemplate.getNumberOfInstances() == 1);
     Map<String, ? extends NodeMetadata> nodes = computeService.runNodesWithTag(
-	    spec.getClusterName(), 1, template);
+	serviceSpec.getClusterName(), 1, template);
     NodeMetadata node = Iterables.getOnlyElement(nodes.values());
     InetAddress namenodePublicAddress = Iterables.getOnlyElement(node.getPublicAddresses());
     InetAddress jobtrackerPublicAddress = Iterables.getOnlyElement(node.getPublicAddresses());
@@ -67,17 +83,32 @@ public class HadoopService {
 	      .authorizePublicKey(publicKey))
     .build();
 
-    computeService.runNodesWithTag(spec.getClusterName(), numWorkers, template);
+    instanceTemplate = clusterSpec.getInstanceTemplate(WORKER_ROLE);
+    checkNotNull(instanceTemplate);
+
+    Map<String, ? extends NodeMetadata> workerNodes =
+      computeService.runNodesWithTag(serviceSpec.getClusterName(),
+	instanceTemplate.getNumberOfInstances(), template);
     
     // TODO: wait for TTs to come up (done in test for the moment)
     
+    Set<Instance> instances = Sets.union(getInstances(MASTER_ROLE, Collections.singleton(node)),
+	getInstances(WORKER_ROLE, Sets.newHashSet(workerNodes.values())));
+    
     Properties config = createClientSideProperties(namenodePublicAddress, jobtrackerPublicAddress);
-    return new HadoopCluster(spec, namenodePublicAddress, config);
+    return new HadoopCluster(instances, config);
   }
   
-  public void destroyCluster() throws IOException {
-    ComputeService computeService = ComputeServiceBuilder.build(spec);
-    computeService.destroyNodesWithTag(spec.getClusterName());
+  private Set<Instance> getInstances(final Set<String> roles, Set<NodeMetadata> nodes) {
+    return Sets.newHashSet(Collections2.transform(Sets.newHashSet(nodes),
+	new Function<NodeMetadata, Instance>() {
+      @Override
+      public Instance apply(NodeMetadata node) {
+	return new Instance(roles,
+	    Iterables.get(node.getPublicAddresses(), 0),
+	    Iterables.get(node.getPrivateAddresses(), 0));
+      }
+    }));
   }
   
   private Properties createClientSideProperties(InetAddress namenode, InetAddress jobtracker) throws IOException {

@@ -1,28 +1,25 @@
 package org.apache.whirr.service.hadoop;
 
+import com.google.common.base.Predicate;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Sets;
+
 import java.net.InetAddress;
 import java.util.Properties;
+import java.util.Set;
 
-import org.apache.whirr.service.ServiceSpec;
+import org.apache.whirr.service.Cluster;
 
-public class HadoopCluster {
-  private ServiceSpec serviceSpec;
-  private InetAddress namenodePublicAddress;
-  private Properties hadoopSiteProperties;
-  
-  public HadoopCluster(ServiceSpec serviceSpec,
-	InetAddress namenodePublicAddress, Properties hadoopSiteProperties) {
-    this.serviceSpec = serviceSpec;
-    this.namenodePublicAddress = namenodePublicAddress;
-    this.hadoopSiteProperties = hadoopSiteProperties;
-  }
-  public ServiceSpec getServiceSpec() {
-    return serviceSpec;
+public class HadoopCluster extends Cluster {
+  public HadoopCluster(Set<Instance> instances, Properties configuration) {
+    super(instances, configuration);
   }
   public InetAddress getNamenodePublicAddress() {
-      return namenodePublicAddress;
-  }
-  public Properties getHadoopSiteProperties() {
-      return hadoopSiteProperties;
+    return Iterables.getOnlyElement(Sets.filter(getInstances(), new Predicate<Instance>() {
+      @Override
+      public boolean apply(Instance instance) {
+	return instance.getRoles().contains("nn");
+      }
+    })).getPublicAddress();
   }
 }

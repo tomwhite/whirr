@@ -6,6 +6,8 @@ import static junit.framework.Assert.assertEquals;
 import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
 
+import org.apache.whirr.service.ClusterSpec;
+import org.apache.whirr.service.ClusterSpec.InstanceTemplate;
 import org.apache.whirr.service.ServiceSpec;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.WatchedEvent;
@@ -22,7 +24,7 @@ public class ZooKeeperServiceTest {
   private String clusterName = "zkclustertest";
   
   private ZooKeeperService service;
-  private String hosts;
+  private ZooKeeperCluster cluster;
   
   @Before
   public void setUp() throws IOException {
@@ -39,8 +41,11 @@ public class ZooKeeperServiceTest {
     serviceSpec.setSecretKeyFile(secretKeyFile);
     serviceSpec.setClusterName(clusterName);
     service = new ZooKeeperService(serviceSpec);
-    hosts = service.launchCluster(2);
-    System.out.println(hosts);
+    
+    ClusterSpec clusterSpec = new ClusterSpec(
+	new InstanceTemplate(2, ZooKeeperService.ZOOKEEPER_ROLE));
+    cluster = service.launchCluster(clusterSpec);
+    System.out.println(cluster.getHosts());
   }
   
   @Test
@@ -77,13 +82,13 @@ public class ZooKeeperServiceTest {
     String path = "/data";
     String data = "Hello";
     ConnectionWatcher watcher = new ConnectionWatcher();
-    watcher.connect(hosts);
+    watcher.connect(cluster.getHosts());
     watcher.getZooKeeper().create(path, data.getBytes(), Ids.OPEN_ACL_UNSAFE,
       CreateMode.PERSISTENT);
     watcher.close();
     
     watcher = new ConnectionWatcher();
-    watcher.connect(hosts);
+    watcher.connect(cluster.getHosts());
     byte[] actualData = watcher.getZooKeeper().getData(path, false, null);
     assertEquals(data, new String(actualData));
     watcher.close();
