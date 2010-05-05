@@ -24,6 +24,8 @@ import org.apache.whirr.service.ServiceSpec;
 import org.apache.whirr.service.Cluster.Instance;
 import org.apache.whirr.service.ClusterSpec.InstanceTemplate;
 import org.jclouds.compute.ComputeService;
+import org.jclouds.compute.RunNodesException;
+import org.jclouds.compute.RunScriptOnNodesException;
 import org.jclouds.compute.domain.NodeMetadata;
 import org.jclouds.compute.domain.OsFamily;
 import org.jclouds.compute.domain.Template;
@@ -56,17 +58,27 @@ public class ZooKeeperService extends Service {
     InstanceTemplate instanceTemplate = clusterSpec.getInstanceTemplate(ZOOKEEPER_ROLE);
     checkNotNull(instanceTemplate);
     int ensembleSize = instanceTemplate.getNumberOfInstances();
-    Map<String, ? extends NodeMetadata> nodeMap =
-      computeService.runNodesWithTag(serviceSpec.getClusterName(), ensembleSize,
+    Set<? extends NodeMetadata> nodeMap;
+    try {
+      nodeMap = computeService.runNodesWithTag(serviceSpec.getClusterName(), ensembleSize,
 	  template);
-    List<NodeMetadata> nodes = Lists.newArrayList(nodeMap.values());
+    } catch (RunNodesException e) {
+      // TODO: can we do better here - proceed if ensemble is big enough?
+      throw new IOException(e);
+    }
+    List<NodeMetadata> nodes = Lists.newArrayList(nodeMap);
     
     // Pass list of all servers in ensemble to configure script.
     // Position is significant: i-th server has id i.
     String servers = Joiner.on(' ').join(getPrivateIps(nodes));
     byte[] configureScript = RunUrlBuilder.runUrls(
 	"apache/zookeeper/post-configure " + servers);
-    computeService.runScriptOnNodesWithTag(serviceSpec.getClusterName(), configureScript);
+    try {
+      computeService.runScriptOnNodesWithTag(serviceSpec.getClusterName(), configureScript);
+    } catch (RunScriptOnNodesException e) {
+      // TODO: retry
+      throw new IOException(e);
+    }
     
     String hosts = Joiner.on(',').join(getHosts(nodes));
     return new ZooKeeperCluster(getInstances(nodes), hosts);

@@ -28,6 +28,7 @@ import org.apache.whirr.service.ServiceSpec;
 import org.apache.whirr.service.Cluster.Instance;
 import org.apache.whirr.service.ClusterSpec.InstanceTemplate;
 import org.jclouds.compute.ComputeService;
+import org.jclouds.compute.RunNodesException;
 import org.jclouds.compute.domain.NodeMetadata;
 import org.jclouds.compute.domain.OsFamily;
 import org.jclouds.compute.domain.Template;
@@ -64,9 +65,15 @@ public class HadoopService extends Service {
     InstanceTemplate instanceTemplate = clusterSpec.getInstanceTemplate(MASTER_ROLE);
     checkNotNull(instanceTemplate);
     checkArgument(instanceTemplate.getNumberOfInstances() == 1);
-    Map<String, ? extends NodeMetadata> nodes = computeService.runNodesWithTag(
-	serviceSpec.getClusterName(), 1, template);
-    NodeMetadata node = Iterables.getOnlyElement(nodes.values());
+    Set<? extends NodeMetadata> nodes;
+    try {
+      nodes = computeService.runNodesWithTag(
+      serviceSpec.getClusterName(), 1, template);
+    } catch (RunNodesException e) {
+      // TODO: can we do better here (retry?)
+      throw new IOException(e);
+    }
+    NodeMetadata node = Iterables.getOnlyElement(nodes);
     InetAddress namenodePublicAddress = Iterables.getOnlyElement(node.getPublicAddresses());
     InetAddress jobtrackerPublicAddress = Iterables.getOnlyElement(node.getPublicAddresses());
     
@@ -86,20 +93,25 @@ public class HadoopService extends Service {
     instanceTemplate = clusterSpec.getInstanceTemplate(WORKER_ROLE);
     checkNotNull(instanceTemplate);
 
-    Map<String, ? extends NodeMetadata> workerNodes =
-      computeService.runNodesWithTag(serviceSpec.getClusterName(),
+    Set<? extends NodeMetadata> workerNodes;
+    try {
+      workerNodes = computeService.runNodesWithTag(serviceSpec.getClusterName(),
 	instanceTemplate.getNumberOfInstances(), template);
+    } catch (RunNodesException e) {
+      // TODO: don't bail out if only a few have failed to start
+      throw new IOException(e);
+    }
     
     // TODO: wait for TTs to come up (done in test for the moment)
     
     Set<Instance> instances = Sets.union(getInstances(MASTER_ROLE, Collections.singleton(node)),
-	getInstances(WORKER_ROLE, Sets.newHashSet(workerNodes.values())));
+	getInstances(WORKER_ROLE, workerNodes));
     
     Properties config = createClientSideProperties(namenodePublicAddress, jobtrackerPublicAddress);
     return new HadoopCluster(instances, config);
   }
   
-  private Set<Instance> getInstances(final Set<String> roles, Set<NodeMetadata> nodes) {
+  private Set<Instance> getInstances(final Set<String> roles, Set<? extends NodeMetadata> nodes) {
     return Sets.newHashSet(Collections2.transform(Sets.newHashSet(nodes),
 	new Function<NodeMetadata, Instance>() {
       @Override

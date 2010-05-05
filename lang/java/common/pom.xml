@@ -10,27 +10,27 @@
     <dependency>
       <groupId>org.jclouds</groupId>
       <artifactId>jclouds-aws</artifactId>
-      <version>1.0-SNAPSHOT</version>
+      <version>1.0-beta-5</version>
     </dependency>
     <dependency>
       <groupId>org.jclouds</groupId>
       <artifactId>jclouds-compute</artifactId>
-      <version>1.0-SNAPSHOT</version>
+      <version>1.0-beta-5</version>
     </dependency>
     <dependency>
       <groupId>org.jclouds</groupId>
       <artifactId>jclouds-enterprise</artifactId>
-      <version>1.0-SNAPSHOT</version>
+      <version>1.0-beta-5</version>
     </dependency>
     <dependency>
       <groupId>org.jclouds</groupId>
       <artifactId>jclouds-jsch</artifactId>
-      <version>1.0-SNAPSHOT</version>
+      <version>1.0-beta-5</version>
     </dependency>
     <dependency>
       <groupId>org.jclouds</groupId>
       <artifactId>jclouds-log4j</artifactId>
-      <version>1.0-SNAPSHOT</version>
+      <version>1.0-beta-5</version>
     </dependency>
     <dependency>
       <groupId>org.apache.hadoop</groupId>
