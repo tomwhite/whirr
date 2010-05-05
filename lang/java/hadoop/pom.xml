@@ -85,9 +85,10 @@
       </plugin>
     </plugins>
   </build>
-  <!--
-    <repositories> <repository> <id>jclouds</id>
-    <url>http://jclouds.googlecode.com/svn/repo</url> </repository>
-    </repositories>
-  -->
+  <repositories>
+    <repository>
+      <id>jclouds</id>
+      <url>http://jclouds.googlecode.com/svn/repo</url>
+    </repository>
+  </repositories>
 </project>
